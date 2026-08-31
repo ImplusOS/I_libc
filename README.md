@@ -17,7 +17,7 @@ architecture and `ImplusOS/Makefile` for how the pieces are wired together).
 
 ```
 I_libc/
-├── Source/    All source for this component, structure preserved from ImplusOS
+├── libc/      All source for this component, structure preserved from ImplusOS
 └── README.md  This file
 ```
 
