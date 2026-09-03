@@ -651,6 +651,12 @@ static int vfscanf_internal(FILE* stream, const char* format, va_list ap)
                 unget_char(c, stream);
                 break;
             }
+/* Floating-point conversions are compiled out of the kernel build: the
+ * kernel is built with -mgeneral-regs-only so that a syscall or interrupt
+ * can never clobber the interrupted userland thread's FPU/SSE registers
+ * (see Kernel/Source/config/arch.mk). No kernel caller formats or scans a
+ * float. */
+#ifndef KERNEL
         } else if (*f == 'f' || *f == 'e' || *f == 'g') {
             double val = 0.0;
             int sign = 1;
@@ -697,6 +703,7 @@ static int vfscanf_internal(FILE* stream, const char* format, va_list ap)
                 else *va_arg(ap, float*) = (float)val;
                 match_count++;
             }
+#endif /* !KERNEL */
         } else if (*f == 'n') {
             if (!suppress) {
                 long pos = file_seek(stream->fd, 0, 1);
@@ -1304,6 +1311,12 @@ int vsnprintf(char* str, size_t size, const char* format, va_list ap) {
                 if (out) *out = (int)i;
             } else if (*f == '%') {
                 if (i < size - 1) str[i++] = '%';
+/* Floating-point conversions are compiled out of the kernel build: the
+ * kernel is built with -mgeneral-regs-only so that a syscall or interrupt
+ * can never clobber the interrupted userland thread's FPU/SSE registers
+ * (see Kernel/Source/config/arch.mk). No kernel caller formats or scans a
+ * float. */
+#ifndef KERNEL
             } else if (*f == 'f' || *f == 'F') {
                 double val;
                 if (is_long_double) val = (double)va_arg(ap, long double);
@@ -1465,6 +1478,7 @@ int vsnprintf(char* str, size_t size, const char* format, va_list ap) {
                     }
                     for (int k = 0; buf[k] && i < size - 1; k++) str[i++] = buf[k];
                 }
+#endif /* !KERNEL */
             } else {
                 if (i < size - 1) str[i++] = *f;
             }

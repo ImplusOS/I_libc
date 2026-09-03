@@ -144,6 +144,10 @@
 #define SYSCALL_NET_GET_DHCP_DNS       267ULL
 #define SYSCALL_READ_KERNEL_LOG        268ULL
 #define SYSCALL_MEMFD_SHM_HANDLE       269ULL
+/* Foreign-server bring-up: see Kernel/Core/syscall/Syscall_Main.h. */
+#define SYSCALL_UNIX_LISTENING         270ULL
+#define SYSCALL_DISPLAY_KMS_MIRROR     271ULL
+#define SYSCALL_DISPLAY_KMS_MIRROR_DIRTY 272ULL
 
 #define OS_STATUS_OK             0LL
 #define OS_STATUS_NOT_FOUND     -2LL

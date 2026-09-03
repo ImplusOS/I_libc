@@ -583,6 +583,13 @@ unsigned long long strtoull(const char* nptr, char** endptr, int base)
     return acc;
 }
 
+/* Decimal float parsing is compiled out of the kernel build. The kernel is
+ * built with -mgeneral-regs-only so that a syscall or interrupt can never
+ * clobber the interrupted userland thread's FPU/SSE registers (see
+ * Kernel/Source/config/arch.mk), and these are the only functions in this
+ * translation unit that need those registers. Nothing in the kernel calls
+ * them. */
+#ifndef KERNEL
 double strtod(const char* nptr, char** endptr)
 {
     const char* s = nptr;
@@ -656,6 +663,7 @@ double atof(const char* nptr)
 {
     return strtod(nptr, NULL);
 }
+#endif /* !KERNEL */
 
 int atoi(const char* nptr) {
     return (int)strtol(nptr, (char**)0, 10);
