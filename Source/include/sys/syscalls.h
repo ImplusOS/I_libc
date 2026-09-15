@@ -147,6 +147,7 @@
 /* Foreign-server bring-up: see Kernel/Core/syscall/Syscall_Main.h. */
 #define SYSCALL_UNIX_LISTENING         270ULL
 #define SYSCALL_DISPLAY_KMS_MIRROR     271ULL
+#define SYSCALL_EVDEV_INJECT           275ULL
 #define SYSCALL_DISPLAY_KMS_MIRROR_DIRTY 272ULL
 #define SYSCALL_MEMFD_FROM_SHM         273ULL
 /* Bytes reserved for a shared-memory object (Kernel/Core/syscall/Syscall_Main.h). */
