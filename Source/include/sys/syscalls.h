@@ -105,6 +105,7 @@
 #define SYSCALL_GETTID            158ULL
 #define SYSCALL_SET_TID_ADDRESS   159ULL
 #define SYSCALL_GETRANDOM         170ULL
+#define SYSCALL_FTRUNCATE         173ULL
 #define SYSCALL_RENAME            175ULL
 #define SYSCALL_FD_POLL           179ULL
 #define SYSCALL_FUTEX             180ULL
