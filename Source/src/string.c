@@ -8,31 +8,44 @@ void* memset(void* ptr, int v, size_t n)
 
     if (n == 0) return ptr;
 
+    const uint64_t fill64 = (uint64_t)c * 0x0101010101010101ULL;
+
     if (n < 32) {
         for (size_t i = 0; i < n; i++)
             p[i] = c;
         return ptr;
     }
 
-    size_t head = (-(uintptr_t)p) & 15u;
+    size_t head = (-(uintptr_t)p) & 7u;
     if (head > n) head = n;
     for (size_t i = 0; i < head; i++)
         p[i] = c;
 
-    uint64_t fill64 = (uint64_t)c * 0x0101010101010101ULL;
-    uint64_t *wp = (uint64_t *)((uintptr_t)(p + head) & ~(uintptr_t)7);
-    size_t skip = (size_t)((uintptr_t)wp - (uintptr_t)p);
-    size_t remaining = n - skip;
+    uint64_t *wp = (uint64_t *)(p + head);
+    size_t remaining = n - head;
 
-    size_t words = remaining / 8;
-    size_t tail  = remaining % 8;
+    /* Straight-line 64-byte groups instead of one loop trip per word: in
+     * the kernel (-mgeneral-regs-only) every store is eight bytes, so this
+     * removes seven of eight branch/pointer-update cycles per 64 bytes in
+     * the shadow-buffer fills and present blits; in userland (-O2) GCC
+     * merges the adjacent stores into 16-byte SSE ones. */
+    while (remaining >= 64) {
+        wp[0] = fill64; wp[1] = fill64;
+        wp[2] = fill64; wp[3] = fill64;
+        wp[4] = fill64; wp[5] = fill64;
+        wp[6] = fill64; wp[7] = fill64;
+        wp += 8;
+        remaining -= 64;
+    }
+    while (remaining >= 8) {
+        *wp++ = fill64;
+        remaining -= 8;
+    }
 
-    for (size_t i = 0; i < words; i++)
-        wp[i] = fill64;
-
-    unsigned char *tp = (unsigned char *)(wp + words);
-    for (size_t i = 0; i < tail; i++)
-        tp[i] = c;
+    unsigned char *tp = (unsigned char *)wp;
+    while (remaining--) {
+        *tp++ = c;
+    }
 
     return ptr;
 }
@@ -49,7 +62,24 @@ void *memmove(void *dst, const void *src, size_t n)
         return memcpy(dst, src, n);
     }
 
+    /* Backwards through the overlap, gathering 32 bytes into locals before
+     * any store goes out: the old one-word-per-iteration loop paid four
+     * extra branch/pointer-update trips for the same bytes. The word loads
+     * go through memcpy so strictly-alignment-constrained targets keep
+     * letting the compiler split them. */
     size_t i = n;
+    while (i >= 32) {
+        i -= 32;
+        uint64_t w0, w1, w2, w3;
+        memcpy(&w0, s + i, 8);
+        memcpy(&w1, s + i + 8, 8);
+        memcpy(&w2, s + i + 16, 8);
+        memcpy(&w3, s + i + 24, 8);
+        memcpy(d + i, &w0, 8);
+        memcpy(d + i + 8, &w1, 8);
+        memcpy(d + i + 16, &w2, 8);
+        memcpy(d + i + 24, &w3, 8);
+    }
     while (i >= 8) {
         i -= 8;
         uint64_t val;
@@ -78,15 +108,41 @@ void* memcpy(void* dst, const void* src, size_t n)
         head++;
     }
     size_t remaining = n - head;
-    size_t words = remaining / 8;
-    size_t tail  = remaining % 8;
-    uint64_t *dw = (uint64_t *)(d + head);
-    const uint64_t *sw = (const uint64_t *)(s + head);
-    for (size_t i = 0; i < words; i++)
-        dw[i] = sw[i];
-    unsigned char *dt = (unsigned char *)(dw + words);
-    const unsigned char *st = (const unsigned char *)(sw + words);
-    for (size_t i = 0; i < tail; i++)
+    /* memcpy() forbids overlap; telling GCC that lets the userland build
+     * vectorize this pass into 16-byte SSE stores (the kernel build stays
+     * scalar because of -mgeneral-regs-only). */
+    uint64_t * __restrict dw = (uint64_t *)(d + head);
+    const uint64_t * __restrict sw = (const uint64_t *)(s + head);
+
+    /* Straight-line unroll: each 64-byte pass gathers its loads into locals
+     * first, so there is no load->store->increment dependency chain and no
+     * per-word loop overhead. This burns through every window-manager
+     * shadow->framebuffer blit and shadow blend copy per frame. Under -O2
+     * in userland GCC merges the adjacent stores into 16-byte SSE ones; in
+     * the -mgeneral-regs-only kernel it is still eight independent
+     * word-copies per pass instead of eight loop trips. */
+    while (remaining >= 64) {
+        uint64_t a0 = sw[0], a1 = sw[1], a2 = sw[2], a3 = sw[3];
+        uint64_t a4 = sw[4], a5 = sw[5], a6 = sw[6], a7 = sw[7];
+        dw[0] = a0; dw[1] = a1; dw[2] = a2; dw[3] = a3;
+        dw[4] = a4; dw[5] = a5; dw[6] = a6; dw[7] = a7;
+        sw += 8; dw += 8;
+        remaining -= 64;
+    }
+    while (remaining >= 32) {
+        uint64_t a0 = sw[0], a1 = sw[1], a2 = sw[2], a3 = sw[3];
+        dw[0] = a0; dw[1] = a1; dw[2] = a2; dw[3] = a3;
+        sw += 4; dw += 4;
+        remaining -= 32;
+    }
+    while (remaining >= 8) {
+        *dw++ = *sw++;
+        remaining -= 8;
+    }
+
+    unsigned char *dt = (unsigned char *)dw;
+    const unsigned char *st = (const unsigned char *)sw;
+    for (size_t i = 0; i < remaining; i++)
         dt[i] = st[i];
 
     return dst;
